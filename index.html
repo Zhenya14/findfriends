@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Пошук Друга</title>
- <style>
-   body {
+  <title>Пошук друга (Realtime DB)</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  body {
   font-family: Arial, sans-serif;
   background: #f4f4f4;
   margin: 0;
@@ -70,42 +74,26 @@ button:hover {
   padding: 12px;
   border-radius: 6px;
   box-shadow: 0 0 4px #cce7ff;
-  } 
- </style>
-
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  }
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>Знайди друга</h1>
+  <h1>Знайди друга (Realtime Database)</h1>
 
-    <form id="friend-form">
-      <input type="text" id="name" placeholder="Твоє ім’я" required />
+  <form id="friend-form">
+    <input id="name" placeholder="Введи ім'я" />
+    <label><input type="checkbox" name="interests" value="музика" /> Музика</label>
+    <label><input type="checkbox" name="interests" value="спорт" /> Спорт</label>
+    <label><input type="checkbox" name="interests" value="ігри" /> Ігри</label>
+    <button type="submit">Відправити</button>
+  </form>
 
-      <label>Оберіть свої інтереси:</label>
-      <div class="checkbox-group">
-        <label><input type="checkbox" name="interests" value="музика" /> Музика</label>
-        <label><input type="checkbox" name="interests" value="спорт" /> Спорт</label>
-        <label><input type="checkbox" name="interests" value="ігри" /> Ігри</label>
-        <label><input type="checkbox" name="interests" value="читання" /> Читання</label>
-        <label><input type="checkbox" name="interests" value="малювання" /> Малювання</label>
-      </div>
-
-      <button type="submit">Знайти друга</button>
-    </form>
-
-    <div id="matches">
-      <h2>Схожі друзі:</h2>
-      <div id="profiles"></div>
-    </div>
-  </div>
+  <div id="profiles"></div>
 
   <script>
-    // Встав сюди свій firebaseConfig із Firebase Console
-const firebaseConfig = {
-  apiKey: "AIzaSyDAwt16j3J0mgZx6qv7i1CGyFlhUbhmm74",
+    // Твій firebaseConfig тут
+    const firebaseConfig = {
+      apiKey: "AIzaSyDAwt16j3J0mgZx6qv7i1CGyFlhUbhmm74",
   authDomain: "blog-9cbee.firebaseapp.com",
   databaseURL: "https://blog-9cbee-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "blog-9cbee",
@@ -113,88 +101,76 @@ const firebaseConfig = {
   messagingSenderId: "1061165830669",
   appId: "1:1061165830669:web:e9282d38c2236617b83b44",
   measurementId: "G-P2F2G00FCP"
-};
+    };
 
-// Ініціалізація Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+    // Ініціалізація Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-// Обробник форми
-document.getElementById("friend-form").addEventListener("submit", async function (e) {
-  e.preventDefault();
+    const form = document.getElementById("friend-form");
+    const profilesDiv = document.getElementById("profiles");
 
-  const name = document.getElementById("name").value.trim();
-  const selectedInterests = [...document.querySelectorAll('input[name="interests"]:checked')]
-                            .map(el => el.value);
+    form.addEventListener("submit", e => {
+      e.preventDefault();
 
-  if (!name) {
-    alert("Введіть своє ім'я!");
-    return;
-  }
-  if (selectedInterests.length === 0) {
-    alert("Оберіть хоча б один інтерес!");
-    return;
-  }
+      const name = document.getElementById("name").value.trim();
+      const selectedInterests = [...document.querySelectorAll('input[name="interests"]:checked')]
+                                .map(el => el.value);
 
-  try {
-    // Записуємо в Firestore
-    await db.collection("profiles").add({
-      name: name,
-      interests: selectedInterests,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      if (!name) return alert("Введи ім'я!");
+      if (selectedInterests.length === 0) return alert("Оберіть хоча б один інтерес!");
+
+      // Записуємо новий профіль у Realtime DB
+      const newProfileRef = db.ref("profiles").push();
+      newProfileRef.set({
+        name: name,
+        interests: selectedInterests,
+        createdAt: Date.now()
+      }, error => {
+        if (error) {
+          alert("Помилка збереження: " + error);
+        } else {
+          form.reset();
+          loadProfiles(selectedInterests);
+        }
+      });
     });
 
-    // Очищуємо форму
-    document.getElementById("friend-form").reset();
+    // Завантажуємо і показуємо профілі
+    function loadProfiles(filterInterests = []) {
+      profilesDiv.textContent = "Завантаження...";
 
-    // Показуємо профілі з урахуванням інтересів користувача
-    loadProfiles(selectedInterests);
-  } catch (error) {
-    console.error("Помилка збереження профілю:", error);
-  }
-});
+      db.ref("profiles").orderByChild("createdAt").once("value", snapshot => {
+        const data = snapshot.val();
+        profilesDiv.innerHTML = "";
 
-// Функція завантаження і показу профілів з Firestore
-async function loadProfiles(filterInterests = []) {
-  const container = document.getElementById("profiles");
-  container.innerHTML = "Завантаження...";
+        if (!data) {
+          profilesDiv.innerHTML = "<p>Поки що немає друзів :(</p>";
+          return;
+        }
 
-  try {
-    const snapshot = await db.collection("profiles")
-      .orderBy("createdAt", "desc")
-      .get();
+        // Фільтруємо профілі за інтересами
+        const profiles = Object.values(data).filter(profile => {
+          if (filterInterests.length === 0) return true;
+          return profile.interests.some(i => filterInterests.includes(i));
+        });
 
-    const matches = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      if (
-        filterInterests.length === 0 ||
-        data.interests.some(i => filterInterests.includes(i))
-      ) {
-        matches.push(data);
-      }
-    });
+        if (profiles.length === 0) {
+          profilesDiv.innerHTML = "<p>Немає друзів за цими інтересами :(</p>";
+          return;
+        }
 
-    if (matches.length === 0) {
-      container.innerHTML = "<p>Поки що немає збігів :(</p>";
-      return;
+        // Відображаємо профілі
+        profiles.forEach(profile => {
+          const div = document.createElement("div");
+          div.textContent = profile.name + " — " + profile.interests.join(", ");
+          profilesDiv.appendChild(div);
+        });
+      });
     }
 
-    container.innerHTML = "";
-    matches.forEach(profile => {
-      const div = document.createElement("div");
-      div.className = "profile-card";
-      div.innerHTML = `<strong>${profile.name}</strong><br>Інтереси: ${profile.interests.join(", ")}`;
-      container.appendChild(div);
-    });
-  } catch (error) {
-    container.innerHTML = "<p>Помилка завантаження профілів.</p>";
-    console.error(error);
-  }
-}
-
-// Показати всіх профілів при першому завантаженні сторінки
-loadProfiles();
+    // Показати всіх при завантаженні сторінки
+    loadProfiles();
   </script>
 </body>
 </html>

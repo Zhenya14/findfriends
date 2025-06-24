@@ -41,7 +41,7 @@
   storageBucket: "blog-9cbee.appspot.com",
   messagingSenderId: "1061165830669",
   appId: "1:1061165830669:web:e9282d38c2236617b83b44",
-  measurementId: "G-P2F2G00FCP"
+  measurementId: "G-P2F2G00FCP
     };
 
     // Ініціалізуємо Firebase
@@ -50,6 +50,14 @@
 
     const form = document.getElementById("friend-form");
     const profilesDiv = document.getElementById("profiles");
+
+    // Функція порівняння двох масивів (враховує порядок неважливо)
+    function arraysEqual(arr1, arr2) {
+      if (arr1.length !== arr2.length) return false;
+      const sorted1 = [...arr1].sort();
+      const sorted2 = [...arr2].sort();
+      return sorted1.every((val, index) => val === sorted2[index]);
+    }
 
     // Функція завантаження та фільтрації профілів
     function loadProfiles(filterInterests = []) {
@@ -65,11 +73,12 @@
         }
 
         const profiles = Object.values(data).filter(profile => {
-  if (filterInterests.length === 0) return false; // Якщо інтересів немає — ніяких збігів!
-  return profile.interests.some(i => filterInterests.includes(i));
-});
+          if (filterInterests.length === 0) return false; // Якщо інтересів немає - не показуємо
+          return arraysEqual(profile.interests, filterInterests);
+        });
+
         if (profiles.length === 0) {
-          profilesDiv.innerHTML = "<p>Немає друзів за цими інтересами :(</p>";
+          profilesDiv.innerHTML = "<p>Немає друзів з такими інтересами :(</p>";
           return;
         }
 

@@ -65,10 +65,9 @@
         }
 
         const profiles = Object.values(data).filter(profile => {
-          if (filterInterests.length === 0) return true;
-          return profile.interests.some(i => filterInterests.includes(i));
-        });
-
+  if (filterInterests.length === 0) return false; // Якщо інтересів немає — ніяких збігів!
+  return profile.interests.some(i => filterInterests.includes(i));
+});
         if (profiles.length === 0) {
           profilesDiv.innerHTML = "<p>Немає друзів за цими інтересами :(</p>";
           return;

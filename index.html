@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Пошук Друга</title>
+ <style>
+   body {
+  font-family: Arial, sans-serif;
+  background: #f4f4f4;
+  margin: 0;
+  padding: 40px;
+  color: #222;
+}
+
+.container {
+  max-width: 500px;
+  margin: auto;
+  background: white;
+  padding: 25px 30px;
+  border-radius: 10px;
+  box-shadow: 0 0 10px #ccc;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 16px;
+}
+
+.checkbox-group label {
+  display: block;
+  margin-bottom: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+button {
+  width: 100%;
+  background-color: #0077cc;
+  color: white;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-top: 15px;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #005fa3;
+}
+
+#profiles {
+  margin-top: 20px;
+}
+
+.profile-card {
+  background: #e6f7ff;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 0 4px #cce7ff;
+  } 
+ </style>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>Знайди друга</h1>
+
+    <form id="friend-form">
+      <input type="text" id="name" placeholder="Твоє ім’я" required />
+
+      <label>Оберіть свої інтереси:</label>
+      <div class="checkbox-group">
+        <label><input type="checkbox" name="interests" value="музика" /> Музика</label>
+        <label><input type="checkbox" name="interests" value="спорт" /> Спорт</label>
+        <label><input type="checkbox" name="interests" value="ігри" /> Ігри</label>
+        <label><input type="checkbox" name="interests" value="читання" /> Читання</label>
+        <label><input type="checkbox" name="interests" value="малювання" /> Малювання</label>
+      </div>
+
+      <button type="submit">Знайти друга</button>
+    </form>
+
+    <div id="matches">
+      <h2>Схожі друзі:</h2>
+      <div id="profiles"></div>
+    </div>
+  </div>
+
+  <script>
+    // Встав сюди свій firebaseConfig із Firebase Console
+const firebaseConfig = {
+  apiKey: "AIzaSyDAwt16j3J0mgZx6qv7i1CGyFlhUbhmm74",
+  authDomain: "blog-9cbee.firebaseapp.com",
+  databaseURL: "https://blog-9cbee-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "blog-9cbee",
+  storageBucket: "blog-9cbee.appspot.com",
+  messagingSenderId: "1061165830669",
+  appId: "1:1061165830669:web:e9282d38c2236617b83b44",
+  measurementId: "G-P2F2G00FCP"
+};
+
+// Ініціалізація Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Обробник форми
+document.getElementById("friend-form").addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const name = document.getElementById("name").value.trim();
+  const selectedInterests = [...document.querySelectorAll('input[name="interests"]:checked')]
+                            .map(el => el.value);
+
+  if (!name) {
+    alert("Введіть своє ім'я!");
+    return;
+  }
+  if (selectedInterests.length === 0) {
+    alert("Оберіть хоча б один інтерес!");
+    return;
+  }
+
+  try {
+    // Записуємо в Firestore
+    await db.collection("profiles").add({
+      name: name,
+      interests: selectedInterests,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Очищуємо форму
+    document.getElementById("friend-form").reset();
+
+    // Показуємо профілі з урахуванням інтересів користувача
+    loadProfiles(selectedInterests);
+  } catch (error) {
+    console.error("Помилка збереження профілю:", error);
+  }
+});
+
+// Функція завантаження і показу профілів з Firestore
+async function loadProfiles(filterInterests = []) {
+  const container = document.getElementById("profiles");
+  container.innerHTML = "Завантаження...";
+
+  try {
+    const snapshot = await db.collection("profiles")
+      .orderBy("createdAt", "desc")
+      .get();
+
+    const matches = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      if (
+        filterInterests.length === 0 ||
+        data.interests.some(i => filterInterests.includes(i))
+      ) {
+        matches.push(data);
+      }
+    });
+
+    if (matches.length === 0) {
+      container.innerHTML = "<p>Поки що немає збігів :(</p>";
+      return;
+    }
+
+    container.innerHTML = "";
+    matches.forEach(profile => {
+      const div = document.createElement("div");
+      div.className = "profile-card";
+      div.innerHTML = `<strong>${profile.name}</strong><br>Інтереси: ${profile.interests.join(", ")}`;
+      container.appendChild(div);
+    });
+  } catch (error) {
+    container.innerHTML = "<p>Помилка завантаження профілів.</p>";
+    console.error(error);
+  }
+}
+
+// Показати всіх профілів при першому завантаженні сторінки
+loadProfiles();
+  </script>
+</body>
+</html>
